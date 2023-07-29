@@ -1,0 +1,179 @@
+---
+title: "EDA_Review3"
+output: html_document
+date: "2023-04-08"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+df_data <- fread("D:\\Downloads\\RFM\\Online Retail.csv")
+glimpse(df_data)
+```
+
+```{r}
+df_data <- df_data %>% 
+  mutate(Quantity = replace(Quantity, Quantity<=0, NA),
+         UnitPrice = replace(UnitPrice, UnitPrice<=0, NA))
+
+df_data <- df_data %>%
+  drop_na()
+```
+
+```{r}
+df_data <- df_data %>% 
+  mutate(InvoiceNo=as.factor(InvoiceNo), StockCode=as.factor(StockCode), 
+         InvoiceDate=as.Date(InvoiceDate, '%m/%d/%Y %H:%M'), CustomerID=as.factor(CustomerID), 
+         Country=as.factor(Country))
+
+df_data <- df_data %>% 
+  mutate(total_dolar = Quantity*UnitPrice)
+
+glimpse(df_data)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+df_RFM <- df_data %>% 
+  group_by(CustomerID) %>% 
+  summarise(recency=as.numeric(as.Date("2012-01-01")-max(InvoiceDate)),
+            frequency=n_distinct(InvoiceNo), monetary= sum(total_dolar)/n_distinct(InvoiceNo)) 
+
+summary(df_RFM)
+
+kable(head(df_RFM))
+```
+
+```{r}
+hist(df_RFM$frequency, breaks = 50)
+
+```
+
+```{r}
+hist(df_RFM$monetary, breaks = 50)
+```
+
+```{r}
+df_RFM$monetary <- log(df_RFM$monetary)
+hist(df_RFM$monetary)
+```
+
+```{r}
+df_RFM2 <- df_RFM
+row.names(df_RFM2) <- df_RFM2$CustomerID
+```
+
+```{r}
+df_RFM2$CustomerID <- NULL
+
+df_RFM2 <- scale(df_RFM2)
+summary(df_RFM2)
+```
+
+```{r}
+d <- dist(df_RFM2)
+c <- hclust(d, method = 'ward.D2')
+plot(c)
+```
+
+```{r}
+```
+
+```{r}
+#read the data
+retail <- read.csv("D:\\Downloads\\RFM\\Online Retail.csv")
+head(retail)
+dim(retail)
+```
+
+```{r}
+colSums(is.na(retail))
+retail <-na.omit(retail)
+retail <- retail[retail$Quantity>0,]
+```
+
+```{r}
+retail$Total <- retail$Quantity * retail$UnitPrice
+retail$InvoiceDate <- as.Date(retail$InvoiceDate, "%Y-%m-%d")
+head(retail)
+summary(retail)
+```
+
+```{r}
+library(dplyr)
+analysis_date <- max(retail$InvoiceDate)
+rfm_df <- retail %>% group_by(CustomerID) %>% summarise(Recency = as.numeric(analysis_date- max(InvoiceDate)), Frequency = n(), Monetary = sum(Total))
+nrow(rfm_df)
+```
+
+```{r}
+library(ggplot2)
+library(gridExtra)
+r <- ggplot(rfm_df) +geom_density(aes(x= Recency))
+f <- ggplot(rfm_df) +geom_density(aes(x = Frequency))
+m <- ggplot(rfm_df) +geom_density(aes(x = Monetary))
+grid.arrange(r, f, m, nrow = 3)
+```
+
+```{r}
+summary(rfm_df)
+```
+
+```{r}
+rfm_df$R_score <- 0
+rfm_df$R_score[rfm_df$Recency >= 141.50] <- 1
+rfm_df$R_score[rfm_df$Recency >= 50.00 & rfm_df$Recency <141.50] <- 2
+rfm_df$R_score[rfm_df$Recency >= 17.00 & rfm_df$Recency <50.00] <- 3
+rfm_df$R_score[rfm_df$Recency < 17.00] <- 4
+rfm_df$F_score<- 0
+rfm_df$F_score[rfm_df$Frequency >=100] <- 4
+rfm_df$F_score[rfm_df$Frequency <100 & rfm_df$Frequency >= 41] <- 3
+rfm_df$F_score[rfm_df$Frequency <41 & rfm_df$Frequency >= 17] <- 2
+rfm_df$F_score[rfm_df$Frequency <17] <- 1
+rfm_df$M_score <- 0
+rfm_df$M_score[rfm_df$Monetary >= 1661] <- 4
+rfm_df$M_score[rfm_df$Monetary < 1661 & rfm_df$Monetary >= 674.5] <- 3
+rfm_df$M_score[rfm_df$Monetary >= 307.2 & rfm_df$Monetary < 674.5] <- 2
+rfm_df$M_score[rfm_df$Monetary <307.2] <- 1
+```
+
+```{r}
+rfm_df <- rfm_df %>% mutate(RFM_score = 100 *R_score +10 * F_score + M_score)
+```
+
+```{r}
+rfm_df$Segment <- "0"
+rfm_df$Segment[which(rfm_df$RFM_score %in% c(444,434,443, 344, 442, 244, 424, 441  ))] <-"Loyalists"
+rfm_df$Segment[which(rfm_df$RFM_score %in% c(332,333,342, 343, 334, 412,413,414,431,432,441,421,422,423, 424, 433 ))] <- "Potential Loyalists"
+rfm_df$Segment[which(rfm_df$RFM_score %in% c(233,234, 241,311, 312, 313,314,321,322,323,324, 331,  341))] <- "Promising"
+rfm_df$Segment[which(rfm_df$RFM_score %in% c(124, 133, 134, 142, 143, 144, 214,224,234, 242, 243, 232 ))] <- "Hesitant"
+rfm_df$Segment[which(rfm_df$RFM_score %in% c(122, 123,131 ,132, 141, 212, 213, 221, 222, 223, 231 ))] <- "Need attention"
+rfm_df$Segment[which(rfm_df$RFM_score %in% c(111, 112, 113, 114, 121, 131, 211, 311, 411 ))] <-"Detractors"
+```
+
+```{r}
+table(rfm_df$Segment)
+ggplot(rfm_df) + geom_bar(aes(x = Segment, fill = Segment))+theme(axis.text.x=element_text(angle=90,hjust=1)) +labs(title = "Barplot for Segments of customers")
+```
+
+```{r}
+library(plotrix)
+x <- table(rfm_df$Segment)
+piepercent<- round(100*x/sum(x), 1)
+lbls = paste(names(x), " ", piepercent,"%")
+plotrix::pie3D(x, labels = lbls, main = "Pie chart for Customer Segments", explode = 0.1)
+```
+
+```{r}
+```
+
+```{r}
+```
+
+```{r}
+```
